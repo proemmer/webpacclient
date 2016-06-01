@@ -1,6 +1,7 @@
 <html>
   <head>
-    <title>Angular 2 QuickStart</title>
+    <script>document.write('<base href="' + document.location + '" />');</script>
+    <title>webpac sample</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="styles.css">
@@ -12,33 +13,20 @@
     <script src="node_modules/zone.js/dist/zone.js"></script>
     <script src="node_modules/reflect-metadata/Reflect.js"></script>
     <script src="node_modules/systemjs/dist/system.src.js"></script>
+    
+    <!-- Include SignalR (& jQuery since it requires it) -->
+    <script src="node_modules/jquery/dist/jquery.min.js"></script>
+    <script src="node_modules/ms-signalr-client/jquery.signalr-2.2.0.min.js"></script>
 
     <!-- 2. Configure SystemJS -->
     <script src="systemjs.config.js"></script>
     <script>
       System.import('app').catch(function(err){ console.error(err); });
     </script>
-    <!--
-    <script>
-      System.config({
-        transpiler: 'typescript', 
-        typescriptOptions: { emitDecoratorMetadata: true }, 
-        packages: {        
-          app: {
-            format: 'register',
-            defaultExtension: 'js'
-          }
-        }
-      });
-      
-      System.import('app/main')
-            .then(null, console.error.bind(console));
-    </script>
-    -->
   </head>
 
   <!-- 3. Display the application -->
   <body>
-    <my-app>Loading...</my-app>
+    <webpac-client-app>Loading...</webpac-client-app>
   </body>
 </html>

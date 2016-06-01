@@ -1,7 +1,58 @@
 import { Component } from '@angular/core';
+import { RouteConfig, ROUTER_DIRECTIVES, ROUTER_PROVIDERS } from '@angular/router-deprecated';
+import { Observable } from "rxjs/Observable";
+import { PlcViewerComponent } from "./plcviewer/plcviewer.component";
+
+import {WebpacService, ConnectionState} from "../services/webpac.service";
 
 @Component({
-  selector: 'my-app',
-  template: '<h1>My First Angular 2 App</h1>'
+  selector: 'webpac-client-app',
+  template: `
+    <h1>{{title}}</h1>
+    <nav>
+      <a [routerLink]="['PlcView']">PlcView</a>
+    </nav>
+    <router-outlet></router-outlet>
+  `,
+  directives: [ROUTER_DIRECTIVES],
+  providers: [
+    ROUTER_PROVIDERS,
+    WebpacService
+  ]
 })
-export class AppComponent { }
+@RouteConfig([
+  {path: '/plcview', name: 'PlcView', component: PlcViewerComponent,useAsDefault: true}
+])
+export class AppComponent{ 
+    title = 'Webpac Sample';
+    // An internal "copy" of the connection state stream used because
+    //  we want to map the values of the original stream. If we didn't 
+    //  need to do that then we could use the service's observable 
+    //  right in the template.
+    //   
+    public connectionState: Observable<string>;
+
+    constructor( private _webpacService: WebpacService) {
+
+      if(this._webpacService != null){
+        // Let's wire up to the signalr observables
+        //
+        this.connectionState = this._webpacService.connectionState
+          .map((state: ConnectionState) => { return ConnectionState[state]; });
+
+        this._webpacService.error.subscribe(
+            (error: any) => { console.warn(error); },
+            (error: any) => { console.error("errors$ error", error); }
+        );
+
+        // Wire up a handler for the starting$ observable to log the
+        //  success/fail result
+        //
+        this._webpacService.starting.subscribe(
+            () => { console.log("signalr service has been started"); },
+            () => { console.warn("signalr service failed to start!"); }
+        );
+      }
+    }
+
+}

@@ -1,0 +1,21 @@
+<div>
+
+
+    <div class="form-group articles">
+        <h2>Blocks</h2>
+        <div *ngIf="blocks">
+            <ul class="articles">
+                <li *ngFor="let block of blocks" [class.selected]="block === selectedBlock" (click)="onSelect(block)">
+                    <span class="badge">{{block}}</span>
+                </li>
+            </ul>
+            <div *ngIf="selectedBlock">
+                <h2>{{selectedBlock}} is selected</h2>
+                <button (click)="onReadBlock()">Read</button>
+            </div>
+        </div>
+    </div>
+
+
+
+</div>
