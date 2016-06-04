@@ -276,7 +276,7 @@ export class WebpacService{
      */
     public writeBlock(name : string, data : any):Observable<boolean>{
         let accessUrl = this._blocksActionUrl + name;
-        return this._http.put(accessUrl, data, { headers: this._headers }).map(res => res.json());
+        return this._http.patch(accessUrl, data, { headers: this._headers }).map(res => res.json());
     }
     
     
@@ -301,6 +301,6 @@ export class WebpacService{
      */
     public writeSymbols(name : string, data : any):Observable<boolean>{
         let accessUrl = this._symbolsActionUrl + name;
-        return this._http.put(accessUrl, data, { headers: this._headers }).map(res => res.json());
+        return this._http.patch(accessUrl, data, { headers: this._headers }).map(res => res.json());
     }
 }
