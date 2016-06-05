@@ -2,15 +2,17 @@ import { Component } from '@angular/core';
 import { RouteConfig, ROUTER_DIRECTIVES, ROUTER_PROVIDERS } from '@angular/router-deprecated';
 import { Observable } from "rxjs/Observable";
 import { PlcViewerComponent } from "./plcviewer/plcviewer.component";
+import { LoginComponent } from "./login/login.component";
 
-import {WebpacService, ConnectionState} from "../services/webpac.service";
+import { WebpacService, ConnectionState } from "../services/webpac.service";
 
 @Component({
   selector: 'webpac-client-app',
   template: `
     <h1>{{title}}</h1>
     <nav>
-      <a [routerLink]="['PlcView']">PlcView</a>
+      <a [routerLink]="['Home']">Home</a>
+      <a [routerLink]="['Login']">Login/out</a>
     </nav>
     <router-outlet></router-outlet>
   `,
@@ -21,7 +23,8 @@ import {WebpacService, ConnectionState} from "../services/webpac.service";
   ]
 })
 @RouteConfig([
-  {path: '/plcview', name: 'PlcView', component: PlcViewerComponent,useAsDefault: true}
+  { path: '/', component: LoginComponent, name: 'Login', useAsDefault:true },
+  { path: '/Home', name: 'Home', component: PlcViewerComponent}
 ])
 export class AppComponent{ 
     title = 'Webpac Sample';

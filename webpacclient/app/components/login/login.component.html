@@ -1,0 +1,11 @@
+<section >
+    <form role="form">
+        <h2>Login</h2>
+        <input type="text" class="form-control"
+               placeholder="Username" [(ngModel)]="username" required autofocus>
+        <input type="password" class="form-control"
+               placeholder="Password" [(ngModel)]="password" required>
+        <button (click)="login()" *ngIf="!loggedIn">Login</button>
+        <button (click)="logout()" *ngIf="loggedIn">Logout</button>
+    </form>
+</section>

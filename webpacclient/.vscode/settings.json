@@ -1,7 +1,10 @@
 // Place your settings in this file to overwrite default and user settings.
 {
-    "files.exclude": {
-       "**/*.js.map": {"when": "$(basename)"},
-       "**/*.js": {"when": "$(basename).ts"}
-    }
+	// Configure glob patterns for excluding files and folders.
+	"files.exclude": {
+		"**/.git": true,
+		"**/.DS_Store": true,
+        "**/*.js": { "when": "$(basename).ts"},
+        "**/*.map": { "when": "$(basename)"}
+	},
 }

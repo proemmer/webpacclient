@@ -2,17 +2,29 @@
 
 
     <div class="form-group articles">
-        <h2>Blocks</h2>
-        <div *ngIf="blocks">
+        <h2>Symbols</h2>
+        <div *ngIf="symbols">
             <ul class="articles">
-                <li *ngFor="let block of blocks" [class.selected]="block === selectedBlock" (click)="onSelect(block)">
-                    <span class="badge">{{block}}</span>
+                <li *ngFor="let symbol of symbols" [class.selected]="block === selectedSymbol" (click)="onSelect(symbol)">
+                    <span class="badge">{{symbol}}</span>
                 </li>
             </ul>
-            <div *ngIf="selectedBlock">
-                <h2>{{selectedBlock}} is selected</h2>
-                <button (click)="onReadBlock()">Read</button>
+            <div *ngIf="selectedSymbol">
+                <h2>{{selectedSymbol}} is selected</h2>
+                <button (click)="onRead()">Read</button>
+                <button (click)="onActivateDataChange()">ActivateDataChange</button>
             </div>
+            
+            <div *ngIf="reads">
+                <h2>Data written from {{selectedSymbol}}</h2>
+                <tr *ngFor="let red of reads" >
+                    <td><input type="checkbox" [(ngModel)]="red.active"/></td>
+                    <td>{{red.name}}</td>
+                    <input [(ngModel)]="red.value" placeholder="?" />
+                    <button (click)="onWrite(red)">write</button>
+                </tr>
+            </div>
+           
         </div>
     </div>
 

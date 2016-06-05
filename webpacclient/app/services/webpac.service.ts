@@ -33,19 +33,28 @@ export class DataChangeEvent {
     }
 }
 
-class Subscriber{
+class Subscriber {
     mapping: string;
     variables: string[];
     subject: Subject<DataChangeEvent>;
 }
 
+
+export interface Authentication {
+    authenticated: boolean;
+    user: string;
+    role: string;
+    token: string;
+    tokenExpires: string;
+}
+
 @Injectable()
-export class WebpacService{
-    private _headers: Headers;
-    private _blocksActionUrl : string;
-    private _symbolsActionUrl : string;
-    private _absoluteActionUrl : string;
-    
+export class WebpacService {
+    private _tokenActionUrl: string;
+    private _symbolicActionUrl: string;
+    private _absoluteActionUrl: string;
+    private _loggedIn = false;
+
     /**
      * starting$ is an observable available to know if the signalr 
      * connection is ready or not. On a successful connection this
@@ -64,52 +73,121 @@ export class WebpacService{
      * SignalR connection
      */
     public error: Observable<string>;
-    
-    
+
+
     // These are used to feed the public observables 
     //
     private connectionStateSubject = new Subject<ConnectionState>();
     private startingSubject = new Subject<any>();
     private errorSubject = new Subject<any>();
+    private authData = null;
 
     // These are used to track the internal SignalR state 
     //
     private _hubConnection: any;
     private _hubProxy: any;
-    
+
     // An internal array to track what channel subscriptions exist 
     //
     private _subscribers = new Array<Subscriber>();
-    
-    
-    constructor(private _http: Http, 
-                private _configuration: Configuration,
-                private _window: SignalrWindow) {
-    
+
+
+    constructor(private _http: Http,
+        private _configuration: Configuration,
+        private _window: SignalrWindow) {
+
+        this.ensureAuthenticated();
         this.configureSignalR();
-        this.configureWebApi();  
+        this.configureWebApi();
     }
-    
-    private configureWebApi(){
-                
-        this._blocksActionUrl = this._configuration.ServerWithApiUrl + "blocks/";
-        this._symbolsActionUrl = this._configuration.ServerWithApiUrl + "symbols/";
-        this._absoluteActionUrl = this._configuration.ServerWithApiUrl + "absolutes/";
-        
-        this._headers = new Headers();
-        this._headers.append('Content-Type', 'application/json');
-        this._headers.append('Accept', 'application/json');
+
+
+
+
+    /***********************************************************************
+     *          LOGIN AND LOGOUT
+     * ********************************************************************/
+
+    public ensureAuthenticated(throwException: boolean = false): boolean {
+
+        try {
+            this._loggedIn = false;
+            if (this.authData != null) {
+                this._loggedIn = ((new Date(this.authData.tokenExpires).valueOf() - Date.now().valueOf()) > 0);
+            } else {
+                var token = localStorage.getItem('auth_token');
+                if (token != null) {
+                    this.authData = JSON.parse(token);
+                    this._loggedIn = ((new Date(this.authData.tokenExpires).valueOf() - Date.now().valueOf()) > 0);
+                }
+            }
+        } catch (error) {
+            console.warn(error);
+            this.authData = null;
+        }
+
+        if (throwException && !this._loggedIn)
+            throw "not authenticated";
+        return this._loggedIn;
     }
-    
-    private configureSignalR(){
-        
-        if(!this._configuration.UseSignalR)
+
+    public login(username: string, password: string): Observable<boolean> {
+        let headers = new Headers();
+        headers.append('Content-Type', 'application/json');
+
+        return this._http
+            .post(
+            this._tokenActionUrl,
+            JSON.stringify({ username, password }),
+            { headers }
+            )
+            .map(res => res.json())
+            .map((auth) => {
+                try {
+                    if (auth.authenticated) {
+                        this.authData = auth;
+                        let stringData = JSON.stringify(auth);
+                        localStorage.setItem('auth_token', stringData);
+                        this._loggedIn = true;
+
+                        if (this._configuration.UseSignalR)
+                            this.start();
+                        console.warn("Authenticated!");
+                    } else {
+                        console.warn("Not Authenticated!");
+                    }
+
+                    return auth.authenticated;
+                } catch (error) {
+                    console.warn(error);
+                    return false;
+                }
+
+            });
+    }
+
+    public logout() {
+        localStorage.removeItem('auth_token');
+        this._loggedIn = false;
+    }
+
+    public isLoggedIn() {
+        return this._loggedIn;
+    }
+
+    /***********************************************************************
+     *          SIGNALR
+     * ********************************************************************/
+
+    private configureSignalR() {
+
+        if (!this._configuration.UseSignalR)
             return;
-        
+
         if (this._window.$ === undefined || this._window.$.hubConnection === undefined) {
             throw new Error("The variable '$' or the .hubConnection() function are not defined...please check the SignalR scripts have been loaded properly");
         }
-        
+
         // Set up our observables
         //
         this.connectionState = this.connectionStateSubject.asObservable();
@@ -119,8 +197,8 @@ export class WebpacService{
         this._hubConnection = this._window.$.hubConnection();
         this._hubConnection.url = this._configuration.ServerWithSignalRUrl;
         this._hubProxy = this._hubConnection.createHubProxy(this._configuration.HubName);
-        
-         // Define handlers for the connection state events
+
+        // Define handlers for the connection state events
         //
         this._hubConnection.stateChanged((state: any) => {
             let newState = ConnectionState.Connecting;
@@ -144,15 +222,15 @@ export class WebpacService{
             //
             this.connectionStateSubject.next(newState);
         });
-        
-         // Define handlers for any errors
+
+        // Define handlers for any errors
         //
         this._hubConnection.error((error: any) => {
             // Push the error on our subject
             //
             this.errorSubject.next(error);
         });
-        
+
         this._hubProxy.on("DataChanged", (mapping: string, variable: string, value: any) => {
             //console.log(`onEvent - ${channel} channel`, ev);
 
@@ -162,7 +240,7 @@ export class WebpacService{
             //  on it. Otherwise we ignore the message.
             //
             let channelSub = this._subscribers.find((x: Subscriber) => {
-                return x.mapping === mapping && x.variables.indexOf(variable) > -1 ;
+                return x.mapping === mapping && x.variables.indexOf(variable) > -1;
             }) as Subscriber;
 
             // If we found a subject then emit the event on it
@@ -175,13 +253,18 @@ export class WebpacService{
                 return channelSub.subject.next(dce);
             }
         });
+
+
+        if (this._loggedIn) {
+            this.start();
+        }
     }
-    
-     /**
-     * Start the SignalR connection. The starting$ stream will emit an 
-     * event if the connection is established, otherwise it will emit an
-     * error.
-     */
+
+    /**
+    * Start the SignalR connection. The starting$ stream will emit an 
+    * event if the connection is established, otherwise it will emit an
+    * error.
+    */
     private start(): void {
         // Now we only want the connection started once, so we have a special
         //  starting$ observable that clients can subscribe to know know if
@@ -199,9 +282,9 @@ export class WebpacService{
                 this.startingSubject.error(error);
             });
     }
-    
-    public subscribe(mapping: string,  variables: string[]): Observable<DataChangeEvent>{
 
+    public subscribe(mapping: string, variables: string[]): Observable<DataChangeEvent> {
+        this.ensureAuthenticated(true);
         // Now we just create our internal object so we can track this subject
         //  in case someone else wants it too
         //
@@ -216,91 +299,94 @@ export class WebpacService{
         //  the starting$ stream since that won't emit a value until the connection
         //  is ready
         //
-        this.starting.subscribe(() => {
-            this._hubProxy.invoke("Subscribe", mapping, variables)
-                .done(() => {
-                    console.log(`Successfully subscribed to  mapping ${mapping} and variable ${variables}`);
-                })
-                .fail((error: any) => {
-                    channelSub.subject.error(error);
-                });
-        },
-            (error: any) => {
+
+        this._hubProxy.invoke("Subscribe", mapping, variables)
+            .done(() => {
+                console.log(`Successfully subscribed to  mapping ${mapping} and variable ${variables}`);
+            })
+            .fail((error: any) => {
                 channelSub.subject.error(error);
             });
+        return channelSub.subject.asObservable();
+    }
 
-        return channelSub.subject.asObservable();      
+
+    /***********************************************************************
+     *          WEB API
+     * ********************************************************************/
+
+    private configureWebApi() {
+        this._tokenActionUrl = this._configuration.ServerWithApiUrl + "token/";
+        this._symbolicActionUrl = this._configuration.ServerWithApiUrl + "symbolic/";
+        this._absoluteActionUrl = this._configuration.ServerWithApiUrl + "absolutes/";
     }
-    
-    
-   /**
-    * Return all available symbolc blocks
-    */
-    public getBlocks(): Observable<Array<string>> {
-        return this._http.get(this._blocksActionUrl, { headers: this._headers }).map(res => res.json());
-    }
-  
-      /**
-     * Read a block or subvariables if given
-     */
-    public readBlockVariable(name : string, variable: string):Observable<any>{
-        let search = new URLSearchParams();
-        let accessUrl = this._blocksActionUrl + name;
-        if(variable) {
-           variable.split(".").forEach(element => {
-               accessUrl += "/" +  element;
-           });
-        }
-        return this._http.get(accessUrl, { headers: this._headers }).map(res => res.json());
-    }
-      
+
     /**
-     * Read a block or subvariables if given
+     * Return all available symbols
      */
-    public readBlockVariables(name : string, ...variables: string[]):Observable<any>{
-        let search = new URLSearchParams();
-        let accessUrl = this._blocksActionUrl + name;
-        if(variables) {
-           let vars = "";
-           variables.forEach(element => {
-               if(vars.length > 0) vars += ",";
-               vars += element;
-           });
-           search.set("variables",vars);
-        }
-        return this._http.get(accessUrl, { headers: this._headers }).map(res => res.json());
-    }
-    
-    /**
-     * Write data to a block
-     */
-    public writeBlock(name : string, data : any):Observable<boolean>{
-        let accessUrl = this._blocksActionUrl + name;
-        return this._http.patch(accessUrl, data, { headers: this._headers }).map(res => res.json());
-    }
-    
-    
-       /**
-    * Return all available symbols
-    */
     public getSymbols(): Observable<Array<string>> {
-        return this._http.get(this._symbolsActionUrl, { headers: this._headers }).map(res => res.json());
+        this.ensureAuthenticated(true);
+        return this._http.get(this._symbolicActionUrl, { headers: this.getHeaders() }).map(res => res.json());
     }
-    
+
     /**
-     * Read a symbols data
-     */
-    public readSymbols(name : string, ...variables: string[]):Observable<any>{
-        let accessUrl = this._symbolsActionUrl + name;
-        if(variables) accessUrl += "/" + variables;
-        return this._http.get(accessUrl, { headers: this._headers }).map(res => res.json());
+   * Read a varaible
+   */
+    public readVariable(name: string, variable: string): Observable<any> {
+        this.ensureAuthenticated(true);
+        let search = new URLSearchParams();
+        let accessUrl = this._symbolicActionUrl + name;
+        if (variable) {
+            variable.split(".").forEach(element => {
+                accessUrl += "/" + element;
+            });
+        }
+        return this._http.get(accessUrl, { headers: this.getHeaders() }).map(res => res.json());
     }
-    
+
     /**
-     * Write data to symbols
+     * Read variables
      */
-    public writeSymbols(name : string, data : any):Observable<boolean>{
-        let accessUrl = this._symbolsActionUrl + name;
-        return this._http.patch(accessUrl, data, { headers: this._headers }).map(res => res.json());
+    //public readVariables(name: string, ...variables: Array<string>): Observable<any> {
+    public readVariables(name: string, variables: Array<string>): Observable<any> {
+        this.ensureAuthenticated(true);
+        let search = new URLSearchParams();
+        let accessUrl = this._symbolicActionUrl + name;
+        if (variables) {
+            let vars = "";
+            variables.forEach(element => {
+                if (vars.length > 0) vars += ",";
+                vars += element;
+            });
+            search.set("variables", vars);
+        }
+        return this._http.get(accessUrl, { headers: this.getHeaders() }).map(res => res.json());
+    }
+
+    /**
+     * Write a variable
+     */
+    public writeVariable(name: string, variable: string, data: any): Observable<any> {
+        this.ensureAuthenticated(true);
+        let accessUrl = this._symbolicActionUrl + name;
+        return this._http.patch(accessUrl, "{ \"" + variable + "\": " + JSON.stringify(data) + " }", { headers: this.getHeaders() });
+    }
+
+
+
+
+    private getHeaders(): any {
+        let headers = new Headers();
+        headers.append('Content-Type', 'application/json');
+        headers.append('Accept', 'application/json');
+
+        try {
+            let authToken = localStorage.getItem('auth_token');
+            headers.append('Authorization', `Bearer ${JSON.parse(authToken).token}`);
+        } catch (error) {
+            console.warn("invald authentication token!")
+        }
+
+        return headers;
     }
 }
