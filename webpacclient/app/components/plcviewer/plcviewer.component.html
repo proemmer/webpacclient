@@ -2,6 +2,14 @@
 
 
     <div class="form-group articles">
+        <h2>Absolute</h2>
+        <div>
+            <input [(ngModel)]="area" placeholder="Area" />
+            <input [(ngModel)]="address" placeholder="Address" />
+            <input [(ngModel)]="rawRed" placeholder="?" />
+            <button (click)="onReadRaw()">Read</button>
+        </div>
+            
         <h2>Symbols</h2>
         <div *ngIf="symbols">
             <ul class="articles">
@@ -24,7 +32,6 @@
                     <button (click)="onWrite(red)">write</button>
                 </tr>
             </div>
-           
         </div>
     </div>
 

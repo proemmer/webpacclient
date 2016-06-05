@@ -25,6 +25,9 @@ export class PlcViewerComponent implements OnInit {
     public selectedSymbol: string;
     public reads: Array<PlcItem> = null;
     public activeVars: Array<string> = [];
+    public area: string = "FB";
+    public address: string = "B5_1";
+    public rawRed: string;
 
     constructor(private _webPacService: WebpacService) {
     }
@@ -50,7 +53,6 @@ export class PlcViewerComponent implements OnInit {
 
 
     public onActivateDataChange() {
-
         try {
             let variables: Array<string> = [];
             if (this.reads != null) {
@@ -73,13 +75,12 @@ export class PlcViewerComponent implements OnInit {
         } catch (error) {
             console.error(error);
         }
-
     }
 
 
     public onRead() {
         try {
-            this._webPacService.readVariable(this.selectedSymbol, "This").subscribe((data: any) => {
+            this._webPacService.readSymbolicVariable(this.selectedSymbol, "This").subscribe((data: any) => {
                 try {
                     if (data != null && data.This != null) {
                         this.reads = new Array<PlcItem>();
@@ -94,12 +95,11 @@ export class PlcViewerComponent implements OnInit {
         } catch (error) {
             console.error(error);
         }
-
     }
 
     public onWrite(item: PlcItem) {
         try {
-            this._webPacService.writeVariable(this.selectedSymbol, item.name, item.value).subscribe((data: any) => {
+            this._webPacService.writeSymbolicVariable(this.selectedSymbol, item.name, item.value).subscribe((data: any) => {
                 console.warn(data);
             });
         } catch (error) {
@@ -113,6 +113,29 @@ export class PlcViewerComponent implements OnInit {
         let updated = this.reads.find((y) => y.name == ev.Variable);
         if (updated != null)
             updated.value = ev.Value;
+    }
+
+
+    public onReadRaw() {
+        try {
+            this._webPacService.readAbsoluteVariable(this.area, this.address).subscribe((data: any) => {
+                try {
+                    if (data != null) {
+                        this.rawRed = data;
+                    } else {
+                        console.warn("no data red!");
+                    }
+                } catch (error) {
+                    console.warn("no data red!");
+                }
+            });
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    public onWriteRaw() {
+
     }
 
 

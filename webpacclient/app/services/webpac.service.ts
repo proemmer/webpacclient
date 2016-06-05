@@ -33,6 +33,14 @@ export class DataChangeEvent {
     }
 }
 
+interface Authentication {
+    Authenticated: boolean;
+    User: string;
+    Role: string;
+    Token: string;
+    TokenExpires: string;
+}
+
 class Subscriber {
     mapping: string;
     variables: string[];
@@ -40,13 +48,7 @@ class Subscriber {
 }
 
 
-export interface Authentication {
-    authenticated: boolean;
-    user: string;
-    role: string;
-    token: string;
-    tokenExpires: string;
-}
+
 
 @Injectable()
 export class WebpacService {
@@ -54,6 +56,17 @@ export class WebpacService {
     private _symbolicActionUrl: string;
     private _absoluteActionUrl: string;
     private _loggedIn = false;
+
+    private _connectionStateSubject = new Subject<ConnectionState>();
+    private _startingSubject = new Subject<any>();
+    private _errorSubject = new Subject<any>();
+    private _authData = null;
+    
+    private _hubConnection: any;
+    private _hubProxy: any;
+
+    // An internal array to track what channel subscriptions exist 
+    private _subscribers = new Array<Subscriber>();
 
     /**
      * starting$ is an observable available to know if the signalr 
@@ -75,22 +88,9 @@ export class WebpacService {
     public error: Observable<string>;
 
 
-    // These are used to feed the public observables 
-    //
-    private connectionStateSubject = new Subject<ConnectionState>();
-    private startingSubject = new Subject<any>();
-    private errorSubject = new Subject<any>();
-    private authData = null;
-
-    // These are used to track the internal SignalR state 
-    //
-    private _hubConnection: any;
-    private _hubProxy: any;
-
-    // An internal array to track what channel subscriptions exist 
-    //
-    private _subscribers = new Array<Subscriber>();
-
+    /***********************************************************************
+     *          CTOR
+     * ********************************************************************/
 
     constructor(private _http: Http,
         private _configuration: Configuration,
@@ -112,24 +112,25 @@ export class WebpacService {
 
         try {
             this._loggedIn = false;
-            if (this.authData != null) {
-                this._loggedIn = ((new Date(this.authData.tokenExpires).valueOf() - Date.now().valueOf()) > 0);
+            if (this._authData != null) {
+                this._loggedIn = ((new Date(this._authData.TokenExpires).valueOf() - Date.now().valueOf()) > 0);
             } else {
                 var token = localStorage.getItem('auth_token');
                 if (token != null) {
-                    this.authData = JSON.parse(token);
-                    this._loggedIn = ((new Date(this.authData.tokenExpires).valueOf() - Date.now().valueOf()) > 0);
+                    this._authData = JSON.parse(token);
+                    this._loggedIn = ((new Date(this._authData.TokenExpires).valueOf() - Date.now().valueOf()) > 0);
                 }
             }
         } catch (error) {
             console.warn(error);
-            this.authData = null;
+            this._authData = null;
         }
 
         if (throwException && !this._loggedIn)
             throw "not authenticated";
         return this._loggedIn;
     }
+
 
     public login(username: string, password: string): Observable<boolean> {
         let headers = new Headers();
@@ -142,10 +143,10 @@ export class WebpacService {
             { headers }
             )
             .map(res => res.json())
-            .map((auth) => {
+            .map((auth:Authentication) => {
                 try {
-                    if (auth.authenticated) {
-                        this.authData = auth;
+                    if (auth.Authenticated) {
+                        this._authData = auth;
                         let stringData = JSON.stringify(auth);
                         localStorage.setItem('auth_token', stringData);
                         this._loggedIn = true;
@@ -157,7 +158,7 @@ export class WebpacService {
                         console.warn("Not Authenticated!");
                     }
 
-                    return auth.authenticated;
+                    return auth.Authenticated;
                 } catch (error) {
                     console.warn(error);
                     return false;
@@ -189,17 +190,15 @@ export class WebpacService {
         }
 
         // Set up our observables
-        //
-        this.connectionState = this.connectionStateSubject.asObservable();
-        this.error = this.errorSubject.asObservable();
-        this.starting = this.startingSubject.asObservable();
+        this.connectionState = this._connectionStateSubject.asObservable();
+        this.error = this._errorSubject.asObservable();
+        this.starting = this._startingSubject.asObservable();
 
         this._hubConnection = this._window.$.hubConnection();
         this._hubConnection.url = this._configuration.ServerWithSignalRUrl;
         this._hubProxy = this._hubConnection.createHubProxy(this._configuration.HubName);
 
         // Define handlers for the connection state events
-        //
         this._hubConnection.stateChanged((state: any) => {
             let newState = ConnectionState.Connecting;
 
@@ -219,16 +218,13 @@ export class WebpacService {
             }
 
             // Push the new state on our subject
-            //
-            this.connectionStateSubject.next(newState);
+            this._connectionStateSubject.next(newState);
         });
 
         // Define handlers for any errors
-        //
         this._hubConnection.error((error: any) => {
             // Push the error on our subject
-            //
-            this.errorSubject.next(error);
+            this._errorSubject.next(error);
         });
 
         this._hubProxy.on("DataChanged", (mapping: string, variable: string, value: any) => {
@@ -238,13 +234,11 @@ export class WebpacService {
             //  check the interal array of subjects to see if one exists
             //  for the channel this came in on, and then emit the event
             //  on it. Otherwise we ignore the message.
-            //
             let channelSub = this._subscribers.find((x: Subscriber) => {
                 return x.mapping === mapping && x.variables.indexOf(variable) > -1;
             }) as Subscriber;
 
             // If we found a subject then emit the event on it
-            //
             if (channelSub !== undefined) {
                 let dce = new DataChangeEvent();
                 dce.Mapping = mapping;
@@ -266,6 +260,7 @@ export class WebpacService {
     * error.
     */
     private start(): void {
+        
         // Now we only want the connection started once, so we have a special
         //  starting$ observable that clients can subscribe to know know if
         //  if the startup sequence is done.
@@ -273,21 +268,19 @@ export class WebpacService {
         // If we just mapped the start() promise to an observable, then any time
         //  a client subscried to it the start sequence would be triggered
         //  again since it's a cold observable.
-        //
         this._hubConnection.start()
             .done(() => {
-                this.startingSubject.next(null);
+                this._startingSubject.next(null);
             })
             .fail((error: any) => {
-                this.startingSubject.error(error);
+                this._startingSubject.error(error);
             });
     }
 
     public subscribe(mapping: string, variables: string[]): Observable<DataChangeEvent> {
         this.ensureAuthenticated(true);
         // Now we just create our internal object so we can track this subject
-        //  in case someone else wants it too
-        //
+        // in case someone else wants it too
         let channelSub = new Subscriber();
         channelSub.mapping = mapping;
         channelSub.variables = variables;
@@ -295,11 +288,9 @@ export class WebpacService {
         this._subscribers.push(channelSub);
 
         // Now SignalR is asynchronous, so we need to ensure the connection is
-        //  established before we call any server methods. So we'll subscribe to 
-        //  the starting$ stream since that won't emit a value until the connection
-        //  is ready
-        //
-
+        // established before we call any server methods. So we'll subscribe to 
+        // the starting$ stream since that won't emit a value until the connection
+        // is ready
         this._hubProxy.invoke("Subscribe", mapping, variables)
             .done(() => {
                 console.log(`Successfully subscribed to  mapping ${mapping} and variable ${variables}`);
@@ -320,6 +311,10 @@ export class WebpacService {
         this._symbolicActionUrl = this._configuration.ServerWithApiUrl + "symbolic/";
         this._absoluteActionUrl = this._configuration.ServerWithApiUrl + "absolutes/";
     }
+    
+     /***********************************************************************
+     *          WEB API - Symbolic
+     * ********************************************************************/
 
     /**
      * Return all available symbols
@@ -332,7 +327,7 @@ export class WebpacService {
     /**
    * Read a varaible
    */
-    public readVariable(name: string, variable: string): Observable<any> {
+    public readSymbolicVariable(name: string, variable: string): Observable<any> {
         this.ensureAuthenticated(true);
         let search = new URLSearchParams();
         let accessUrl = this._symbolicActionUrl + name;
@@ -348,7 +343,7 @@ export class WebpacService {
      * Read variables
      */
     //public readVariables(name: string, ...variables: Array<string>): Observable<any> {
-    public readVariables(name: string, variables: Array<string>): Observable<any> {
+    public readSymbolicVariables(name: string, variables: Array<string>): Observable<any> {
         this.ensureAuthenticated(true);
         let search = new URLSearchParams();
         let accessUrl = this._symbolicActionUrl + name;
@@ -366,13 +361,27 @@ export class WebpacService {
     /**
      * Write a variable
      */
-    public writeVariable(name: string, variable: string, data: any): Observable<any> {
+    public writeSymbolicVariable(name: string, variable: string, data: any): Observable<any> {
         this.ensureAuthenticated(true);
         let accessUrl = this._symbolicActionUrl + name;
         return this._http.patch(accessUrl, "{ \"" + variable + "\": " + JSON.stringify(data) + " }", { headers: this.getHeaders() });
     }
 
 
+     /***********************************************************************
+     *          WEB API - Absolute
+     * ********************************************************************/
+
+
+    /**
+   * Read a varaible
+   */
+    public readAbsoluteVariable(area: string, address: string): Observable<any> {
+        this.ensureAuthenticated(true);
+        let search = new URLSearchParams();
+        let accessUrl = this._absoluteActionUrl + area + "/" + address;
+        return this._http.get(accessUrl, { headers: this.getHeaders() }).map(res => res.json());
+    }
 
 
     private getHeaders(): any {
@@ -382,7 +391,7 @@ export class WebpacService {
 
         try {
             let authToken = localStorage.getItem('auth_token');
-            headers.append('Authorization', `Bearer ${JSON.parse(authToken).token}`);
+            headers.append('Authorization', `Bearer ${JSON.parse(authToken).Token}`);
         } catch (error) {
             console.warn("invald authentication token!")
         }
