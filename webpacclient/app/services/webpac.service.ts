@@ -26,6 +26,7 @@ export class DataChangeEvent {
     Variable: string;
     Timestamp: Date;
     Value: any;
+    IsRaw: boolean;
     Json: string;
 
     constructor() {
@@ -227,7 +228,7 @@ export class WebpacService {
             this._errorSubject.next(error);
         });
 
-        this._hubProxy.on("DataChanged", (mapping: string, variable: string, value: any) => {
+        this._hubProxy.on("DataChanged", (mapping: string, variable: string, value: any, isRaw: boolean) => {
             //console.log(`onEvent - ${channel} channel`, ev);
 
             // This method acts like a broker for incoming messages. We 
@@ -244,6 +245,7 @@ export class WebpacService {
                 dce.Mapping = mapping;
                 dce.Variable = variable;
                 dce.Value = value;
+                dce.IsRaw = isRaw;
                 return channelSub.subject.next(dce);
             }
         });
@@ -299,6 +301,50 @@ export class WebpacService {
                 channelSub.subject.error(error);
             });
         return channelSub.subject.asObservable();
+    }
+
+    public unsubscribe(mapping: string, variables: string[]): Observable<any> {
+    	return this._hubProxy.invoke("Unsubscribe", mapping, variables)
+            .done(() => {
+                console.log(`Successfully subscribed to  mapping ${mapping} and variables ${variables}`);
+            })
+            .fail((error: any) => {
+                console.log(`Error usubscribed to  mapping ${mapping} and variables ${variables} error wa ${error}`);
+            });
+    }
+
+    public subscribeRaw(area: string, adresses: string[]): Observable<DataChangeEvent> {
+        this.ensureAuthenticated(true);
+        // Now we just create our internal object so we can track this subject
+        // in case someone else wants it too
+        let channelSub = new Subscriber();
+        channelSub.mapping = area;
+        channelSub.variables = adresses;
+        channelSub.subject = new Subject<DataChangeEvent>();
+        this._subscribers.push(channelSub);
+
+        // Now SignalR is asynchronous, so we need to ensure the connection is
+        // established before we call any server methods. So we'll subscribe to 
+        // the starting$ stream since that won't emit a value until the connection
+        // is ready
+        this._hubProxy.invoke("SubscribeRaw", area, adresses)
+            .done(() => {
+                console.log(`Successfully subscribed to  area ${area} and adresses ${adresses}`);
+            })
+            .fail((error: any) => {
+                channelSub.subject.error(error);
+            });
+        return channelSub.subject.asObservable();
+    }
+
+    public unsubscribeRaw(area: string, adresses: string[]): Observable<any> {
+    	return this._hubProxy.invoke("SubscribeRaw", area, adresses)
+            .done(() => {
+                console.log(`Successfully subscribed to  area ${area} and adresses ${adresses}`);
+            })
+            .fail((error: any) => {
+                console.log(`Error usubscribed to  area ${area} and adresses ${adresses} error wa ${error}`);
+            });
     }
 
 
@@ -381,6 +427,15 @@ export class WebpacService {
         let search = new URLSearchParams();
         let accessUrl = this._absoluteActionUrl + area + "/" + address;
         return this._http.get(accessUrl, { headers: this.getHeaders() }).map(res => res.json());
+    }
+    
+        /**
+     * Write a variable
+     */
+    public writeAbsoluteVariable(area: string, address: string, data: any): Observable<any> {
+        this.ensureAuthenticated(true);
+        let accessUrl = this._absoluteActionUrl + area + "/" + address;
+        return this._http.patch(accessUrl, JSON.stringify(data), { headers: this.getHeaders() });
     }
 
 

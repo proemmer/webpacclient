@@ -8,6 +8,9 @@
             <input [(ngModel)]="address" placeholder="Address" />
             <input [(ngModel)]="rawRed" placeholder="?" />
             <button (click)="onReadRaw()">Read</button>
+            <button (click)="onWriteRaw()">Write</button>
+            <button (click)="onActivateRawChanges()" *ngIf="!activeatedRawChanges">Activate</button>
+            <button (click)="onDeactivateRawChanges()" *ngIf="activeatedRawChanges">Deactivate</button>
         </div>
             
         <h2>Symbols</h2>

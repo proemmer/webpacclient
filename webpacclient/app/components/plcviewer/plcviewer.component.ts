@@ -18,6 +18,7 @@ export class PlcItem {
 @Component({
     selector: 'webpac-viewer',
     templateUrl: 'app/components/plcviewer/plcviewer.component.html',
+    styleUrls: ['app/components/plcviewer/plcviewer.component.css'],
 })
 export class PlcViewerComponent implements OnInit {
 
@@ -25,9 +26,10 @@ export class PlcViewerComponent implements OnInit {
     public selectedSymbol: string;
     public reads: Array<PlcItem> = null;
     public activeVars: Array<string> = [];
-    public area: string = "FB";
-    public address: string = "B5_1";
+    public area: string = "DB1112";
+    public address: string = "W0";
     public rawRed: string;
+    public activeatedRawChanges: boolean;
 
     constructor(private _webPacService: WebpacService) {
     }
@@ -78,6 +80,35 @@ export class PlcViewerComponent implements OnInit {
     }
 
 
+    public onActivateRawChanges() {
+        let addresses: Array<string> = [];
+        addresses.push(this.address);
+        this.activeatedRawChanges = true;
+        this._webPacService.subscribeRaw(this.area, addresses).subscribe(
+            (dce: DataChangeEvent) => {
+                this.dataUpdated(dce);
+            },
+            (error: any) => {
+                console.warn("Attempt to join channel failed!", error);
+            }
+        )
+    }
+
+    public onDeactivateRawChanges() {
+        let addresses: Array<string> = [];
+        addresses.push(this.address);
+        this.activeatedRawChanges = false;
+        this._webPacService.unsubscribeRaw(this.area, addresses).subscribe(
+            (dce: DataChangeEvent) => {
+                this.dataUpdated(dce);
+            },
+            (error: any) => {
+                console.warn("Attempt to join channel failed!", error);
+            }
+        )
+    }
+
+
     public onRead() {
         try {
             this._webPacService.readSymbolicVariable(this.selectedSymbol, "This").subscribe((data: any) => {
@@ -110,9 +141,17 @@ export class PlcViewerComponent implements OnInit {
     private dataUpdated(ev: DataChangeEvent): void {
         console.warn(`onEvent - ${ev.Mapping}.${ev.Variable}=${ev.Value}`);
 
-        let updated = this.reads.find((y) => y.name == ev.Variable);
-        if (updated != null)
-            updated.value = ev.Value;
+        if(ev.IsRaw){
+            if(ev.Mapping == this.area && ev.Variable == this.address){
+                this.rawRed = ev.Value;
+            }
+        }
+        else{
+            let updated = this.reads.find((y) => y.name == ev.Variable);
+            if (updated != null)
+                updated.value = ev.Value;
+        }
+
     }
 
 
@@ -135,7 +174,13 @@ export class PlcViewerComponent implements OnInit {
     }
 
     public onWriteRaw() {
-
+        try {
+            this._webPacService.writeAbsoluteVariable(this.area, this.address, this.rawRed).subscribe((data: any) => {
+                console.warn(data);
+            });
+        } catch (error) {
+            console.error(error);
+        }
     }
 
 
