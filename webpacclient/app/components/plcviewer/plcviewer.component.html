@@ -1,6 +1,6 @@
 <div>
 
-
+    <h2>Plc is {{state}}</h2>
     <div class="form-group articles">
         <h2>Absolute</h2>
         <div>
@@ -23,7 +23,8 @@
             <div *ngIf="selectedSymbol">
                 <h2>{{selectedSymbol}} is selected</h2>
                 <button (click)="onRead()">Read</button>
-                <button (click)="onActivateDataChange()">ActivateDataChange</button>
+                <button (click)="onActivateDataChange()" *ngIf="!activeatedChanges">ActivateDataChange</button>
+                <button (click)="onDeactivateDataChange()" *ngIf="activeatedChanges">DeactivateDataChange</button>
             </div>
             
             <div *ngIf="reads">

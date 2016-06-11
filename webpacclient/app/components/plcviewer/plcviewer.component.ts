@@ -21,7 +21,7 @@ export class PlcItem {
     styleUrls: ['app/components/plcviewer/plcviewer.component.css'],
 })
 export class PlcViewerComponent implements OnInit {
-
+    public state: string = "not connected";
     public symbols: Array<string> = [];
     public selectedSymbol: string;
     public reads: Array<PlcItem> = null;
@@ -30,11 +30,15 @@ export class PlcViewerComponent implements OnInit {
     public address: string = "W0";
     public rawRed: string;
     public activeatedRawChanges: boolean;
+    public activeatedChanges: boolean;
 
     constructor(private _webPacService: WebpacService) {
     }
 
     public ngOnInit() {
+        this._webPacService.subscribeConnectionChanged().subscribe((state) => {
+            this.state = state.Connected ? "connected" : "not connected";
+        });
         this._webPacService.getSymbols().subscribe((symbols) => {
             if (symbols != null && symbols.length > 0) {
                 try {
@@ -56,21 +60,45 @@ export class PlcViewerComponent implements OnInit {
 
     public onActivateDataChange() {
         try {
-            let variables: Array<string> = [];
             if (this.reads != null) {
                 this.reads.forEach(variable => {
                     if (variable.active) {
-                        variables.push(variable.name);
+                        this.activeVars.push(variable.name);
                         console.info("active variable " + variable.name + " for mapping " + this.selectedSymbol);
                     }
                 });
 
-                this._webPacService.subscribe(this.selectedSymbol, variables).subscribe(
+                this._webPacService.subscribe(this.selectedSymbol, this.activeVars).subscribe(
                     (dce: DataChangeEvent) => {
+                        this.activeatedChanges = true;
                         this.dataUpdated(dce);
                     },
                     (error: any) => {
                         console.warn("Attempt to join channel failed!", error);
+                    }
+                )
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    public onDeactivateDataChange() {
+        try {
+            this.activeatedChanges = false;
+            if (this.reads != null) {
+                this._webPacService.unsubscribe(this.selectedSymbol, this.activeVars).subscribe(
+                    (result: boolean) => {
+                        if (result) {
+                            
+                            this.reads.forEach(variable => {
+                                if (variable.active) {
+                                    variable.active = false;
+                                    console.info("deactive variable " + variable.name + " for mapping " + this.selectedSymbol);
+                                }
+                            });
+                            this.activeVars = [];
+                        }
                     }
                 )
             }
@@ -141,12 +169,12 @@ export class PlcViewerComponent implements OnInit {
     private dataUpdated(ev: DataChangeEvent): void {
         console.warn(`onEvent - ${ev.Mapping}.${ev.Variable}=${ev.Value}`);
 
-        if(ev.IsRaw){
-            if(ev.Mapping == this.area && ev.Variable == this.address){
+        if (ev.IsRaw) {
+            if (ev.Mapping == this.area && ev.Variable == this.address) {
                 this.rawRed = ev.Value;
             }
         }
-        else{
+        else {
             let updated = this.reads.find((y) => y.name == ev.Variable);
             if (updated != null)
                 updated.value = ev.Value;
@@ -202,8 +230,8 @@ export class PlcViewerComponent implements OnInit {
                 //get name and data
                 var value = object[property];
                 var name = prefix != null ?
-                    isArray ? prefix + "[" + property + "]" : prefix + "." + property :
-                    isArray ? "[" + property + "]" : property;
+                    isArray ? prefix + "[" + (Number(property) + 1) + "]" : prefix + "." + property :
+                    isArray ? "[" + (Number(property) + 1) + "]" : property;
 
                 if (value === Object(value)) {
                     //property is an object, so step up to handle these properties

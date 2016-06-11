@@ -34,6 +34,17 @@ export class DataChangeEvent {
     }
 }
 
+export class ConnectionChangeEvent {
+    Connected:boolean;
+    Timestamp: Date;
+    Json: string;
+
+    constructor() {
+        this.Timestamp = new Date();
+    }
+}
+
+
 interface Authentication {
     Authenticated: boolean;
     User: string;
@@ -46,6 +57,10 @@ class Subscriber {
     mapping: string;
     variables: string[];
     subject: Subject<DataChangeEvent>;
+}
+
+class ConnectionSubscriber {
+    connState: Subject<ConnectionChangeEvent>;
 }
 
 
@@ -68,6 +83,7 @@ export class WebpacService {
 
     // An internal array to track what channel subscriptions exist 
     private _subscribers = new Array<Subscriber>();
+    private _connSubscribers = new Array<ConnectionSubscriber>();
 
     /**
      * starting$ is an observable available to know if the signalr 
@@ -229,25 +245,28 @@ export class WebpacService {
         });
 
         this._hubProxy.on("DataChanged", (mapping: string, variable: string, value: any, isRaw: boolean) => {
+            
+            let dce = new DataChangeEvent();
+            dce.Mapping = mapping;
+            dce.Variable = variable;
+            dce.Value = value;
+            dce.IsRaw = isRaw;
+
+            this._subscribers.forEach(channelSub => {
+                if(channelSub.mapping === mapping && channelSub.variables.indexOf(variable) > -1){
+                    channelSub.subject.next(dce);
+                }
+            });
+        });
+
+        this._hubProxy.on("ConnectionChanged", (state: boolean) => {
             //console.log(`onEvent - ${channel} channel`, ev);
-
-            // This method acts like a broker for incoming messages. We 
-            //  check the interal array of subjects to see if one exists
-            //  for the channel this came in on, and then emit the event
-            //  on it. Otherwise we ignore the message.
-            let channelSub = this._subscribers.find((x: Subscriber) => {
-                return x.mapping === mapping && x.variables.indexOf(variable) > -1;
-            }) as Subscriber;
-
-            // If we found a subject then emit the event on it
-            if (channelSub !== undefined) {
-                let dce = new DataChangeEvent();
-                dce.Mapping = mapping;
-                dce.Variable = variable;
-                dce.Value = value;
-                dce.IsRaw = isRaw;
-                return channelSub.subject.next(dce);
-            }
+            let cce = new ConnectionChangeEvent();
+            cce.Connected = state;
+            
+            this._connSubscribers.forEach(channelSub => {
+                channelSub.connState.next(cce);
+            });
         });
 
 
@@ -278,6 +297,20 @@ export class WebpacService {
                 this._startingSubject.error(error);
             });
     }
+    
+    public subscribeConnectionChanged(): Observable<ConnectionChangeEvent> {
+        this.ensureAuthenticated(true);
+        // Now we just create our internal object so we can track this subject
+        // in case someone else wants it too
+        let channelSub = new ConnectionSubscriber();
+        channelSub.connState = new Subject<ConnectionChangeEvent>();
+        this._connSubscribers.push(channelSub);
+        return channelSub.connState.asObservable();
+    }
+
+    //TODO:  Remove correct subscriber from the list
+    public unsubscribeConnectionChanged(){
+    }
 
     public subscribe(mapping: string, variables: string[]): Observable<DataChangeEvent> {
         this.ensureAuthenticated(true);
@@ -303,13 +336,16 @@ export class WebpacService {
         return channelSub.subject.asObservable();
     }
 
-    public unsubscribe(mapping: string, variables: string[]): Observable<any> {
+    //TODO:  Remove correct subscriber from the list
+    public unsubscribe(mapping: string, variables: string[]): Observable<boolean> {
     	return this._hubProxy.invoke("Unsubscribe", mapping, variables)
             .done(() => {
-                console.log(`Successfully subscribed to  mapping ${mapping} and variables ${variables}`);
+                console.log(`Successfully unsubscribed from mapping ${mapping} and variables ${variables}`);
+                return true;
             })
             .fail((error: any) => {
-                console.log(`Error usubscribed to  mapping ${mapping} and variables ${variables} error wa ${error}`);
+                console.log(`Error usubscribed from  mapping ${mapping} and variables ${variables} error wa ${error}`);
+                return false;
             });
     }
 
