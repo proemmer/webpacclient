@@ -339,7 +339,6 @@ export class WebpacService {
         return channelSub.subject.asObservable();
     }
 
-    //TODO:  Remove correct subscriber from the list
     public unsubscribe(mapping: string, variables: string[]): Observable<boolean> {
     	return this._hubProxy.invoke("Unsubscribe", mapping, variables)
             .done(() => {
@@ -377,7 +376,7 @@ export class WebpacService {
     }
 
     public unsubscribeRaw(area: string, adresses: string[]): Observable<any> {
-    	return this._hubProxy.invoke("SubscribeRaw", area, adresses)
+    	return this._hubProxy.invoke("UnsubscribeRaw", area, adresses)
             .done(() => {
                 console.log(`Successfully subscribed to  area ${area} and adresses ${adresses}`);
             })
