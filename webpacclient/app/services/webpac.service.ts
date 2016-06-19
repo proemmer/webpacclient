@@ -289,6 +289,9 @@ export class WebpacService {
         // If we just mapped the start() promise to an observable, then any time
         //  a client subscried to it the start sequence would be triggered
         //  again since it's a cold observable.
+        let token = this.getToken();
+        if(token != null)
+            this._hubConnection.qs = { BearerToken : token };
         this._hubConnection.start()
             .done(() => {
                 this._startingSubject.next(null);
@@ -480,13 +483,19 @@ export class WebpacService {
         headers.append('Content-Type', 'application/json');
         headers.append('Accept', 'application/json');
 
+        let token = this.getToken();
+        if(token != null)
+            headers.append('Authorization', `Bearer ${token}`);
+        return headers;
+    }
+
+    private getToken(): string{
         try {
             let authToken = localStorage.getItem('auth_token');
-            headers.append('Authorization', `Bearer ${JSON.parse(authToken).Token}`);
+            return JSON.parse(authToken).Token;
         } catch (error) {
             console.warn("invald authentication token!")
         }
-
-        return headers;
+        return null;
     }
 }
