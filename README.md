@@ -1,10 +1,6 @@
 # webpacclient
-sample client for webpac
+This is a sample client written in typescript whith the usage of angula2 to show the functionality of webpac. Webpac is a software which offers an web-interface for accessing Step7 PLC's. 
 
-
-
-https://github.com/Sn3b/ASPNET-Core-Angular2-SignalR-Typescript/blob/master/src/AspNetCoreAngular2/wwwroot/index.html
-https://angular.io/docs/ts/latest/quickstart.html
-https://blog.sstorie.com/integrating-angular-2-and-signalr-part-2-of-2/
-https://github.com/FabianGosebrink/ASPNET-Core-Angular2-SignalR-Typescript
-
+- [Documentation of webpac](https://github.com/proemmer/webpac-docs)
+- [Release Notes of webpac](https://github.com/proemmer/webpac/releases)
+- [Project site on github](https://github.com/proemmer/webpac)
